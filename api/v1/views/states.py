@@ -1,70 +1,77 @@
 #!/usr/bin/python3
-""" states """
+"""
+Create a new view for State objects that handles
+all default RESTful API actions
+"""
+from flask import Flask, jsonify, abort, request, make_response
 from models import storage
 from api.v1.views import app_views
-from flask import jsonify, abort, make_response
-from flask import request
 from models.state import State
 
+app = Flask(__name__)
 
-@app_views.route('/states',  methods=['GET'], strict_slashes=False)
-@app_views.route('/states/<string:state_id>', methods=['GET'],
+
+@app_views.route('/states', methods=['GET'], strict_slashes=False)
+def states_all():
+    """List retrieival of all State objects"""
+    states = storage.all('State')
+    statesLIST = []
+    for obj in states.values():
+        statesLIST.append(obj.to_dict())
+    return jsonify(statesLIST), 200
+
+
+@app_views.route('/states/<state_id>', methods=['GET'], strict_slashes=False)
+def state_id_get(state_id):
+    """List retrieval of given State object"""
+    states = storage.all('State')
+    statesLIST = []
+    for obj in states.values():
+        if obj.id == state_id:
+            statesLIST.append(obj.to_dict())
+    if statesLIST is None or not statesLIST:
+        abort(404)
+    return jsonify(statesLIST), 200
+
+
+@app_views.route('/states/<state_id>', methods=['DELETE'],
                  strict_slashes=False)
-def get_states(state_id=None):
-    """ get state(s) information """
-    if state_id is None:
-        list_states = []
-        states = storage.all("State").values()
-        for state in states:
-            list_states.append(state.to_dict())
-        return jsonify(list_states)
-    else:
-        state = storage.get("State", state_id)
-        if state is None:
-            abort(404)
-        else:
-            return jsonify(state.to_dict())
-
-
-@app_views.route('/states/<string:state_id>', methods=['DELETE'],
-                 strict_slashes=False)
-def delete_state(state_id):
-    """ delete a state """
-    state = storage.get("State", state_id)
-    if state is None:
+def del_state_id(state_id):
+    """Deletes a state object"""
+    state = storage.get('State', state_id)
+    if not state:
         abort(404)
     storage.delete(state)
     storage.save()
     return make_response(jsonify({}), 200)
 
 
-@app_views.route('/states/', methods=['POST'], strict_slashes=False)
-def create_state():
-    """ create a state """
-    req = request.get_json()
-    # print(type(req))
-    if req is None:
+@app_views.route('/states', methods=['POST'], strict_slashes=False)
+def post_states():
+    """Posts a state object from request"""
+    body = request.get_json(silent=True)
+    if body is None:
         abort(400, "Not a JSON")
-    if 'name' not in req:
+    if 'name' not in body:
         abort(400, "Missing name")
-    new_state = State(name=req['name'])
-    new_state.save()
-    return make_response(jsonify((new_state.to_dict())), 201)
+    NEWstate = State(**body)
+    storage.new(NEWstate)
+    storage.save()
+    return jsonify(NEWstate.to_dict()), 201
 
 
-@app_views.route('/states/<string:state_id>', methods=['PUT'],
-                 strict_slashes=False)
-def update_state(state_id):
-    """ update a state """
-    state = storage.get("State", state_id)
-    if state is None:
-        abort(404)
-    req = request.get_json()
-    if req is None:
+@app_views.route('/states/<state_id>', methods=['PUT'])
+def put_state_id(state_id):
+    """Updates the state object"""
+    body = request.get_json(silent=True)
+    if body is None:
         abort(400, "Not a JSON")
-    ignore = ['id', 'created_at', 'updated_at']
-    for attribute, value in req.items():
-        if attribute not in ignore:
-            setattr(state, attribute, value)
-    state.save()
-    return make_response(jsonify((state.to_dict())), 200)
+    state = storage.get('State', state_id)
+    if not state:
+        abort(404)
+    ignore_keys = ['id', 'created_at', 'updated_at']
+    for key, value in body.items():
+        if key not in ignore_keys:
+            setattr(state, key, value)
+    storage.save()
+    return jsonify(state.to_dict()), 200
